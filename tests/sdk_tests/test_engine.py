@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import socket
+import sys
 import time
 from contextlib import closing
 from pathlib import Path
@@ -19,6 +20,7 @@ from tesseract_core.sdk.api_parse import (
     DEFAULT_PYTHON,
     TesseractBuildConfig,
     TesseractConfig,
+    get_config,
     validate_tesseract_api,
 )
 from tesseract_core.sdk.cli import AVAILABLE_RECIPES
@@ -788,6 +790,41 @@ def test_init(tmpdir, recipe):
     with open(tmpdir / "test_dir/tesseract_config.yaml") as config_yaml:
         test = yaml.safe_load(config_yaml)
         assert test["name"] == "foo"
+
+    # Nothing is pinned by default, so the Tesseract follows our defaults...
+    assert "base_image" not in test["build_config"]
+    assert "requirements" not in test["build_config"]
+
+    # The comments say which defaults apply as of which release, and where to find
+    # the current ones.
+    from tesseract_core import __version__
+
+    generated = (Path(tmpdir) / "test_dir" / "tesseract_config.yaml").read_text()
+    assert f"as of\n  # tesseract-core {__version__}, debian:" in generated
+    assert f"(as of tesseract-core {__version__}, {DEFAULT_PYTHON})" in generated
+    assert "configuration reference in the docs" in generated
+
+    # ...but uncommenting the offered pins gives a valid config pinned to the
+    # current default image and the Python init ran on.
+    config_path = Path(tmpdir) / "test_dir" / "tesseract_config.yaml"
+    pinned = config_path.read_text()
+    for line in (
+        "  # base_image: ",
+        "  # requirements:",
+        "  #   provider: uv-pip",
+        "  #   python_version: ",
+    ):
+        assert pinned.count(line) == 1, line
+        pinned = pinned.replace(line, line.replace("# ", "", 1))
+    config_path.write_text(pinned)
+    build_config = get_config(config_path.parent).build_config
+    assert (
+        build_config.base_image
+        == TesseractBuildConfig.model_fields["base_image"].default
+    )
+    assert build_config.requirements.python_version == (
+        f"{sys.version_info.major}.{sys.version_info.minor}"
+    )
 
     # Ensure template passes validation
     validate_tesseract_api(api_path.parent)

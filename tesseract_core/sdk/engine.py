@@ -9,6 +9,7 @@ import logging
 import optparse
 import os
 import re
+import sys
 import tempfile
 from collections.abc import Callable, Collection
 from functools import cache
@@ -27,6 +28,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from .._deprecations import DEFAULT_BASE_IMAGE_CHANGE, NEXT_DEFAULT_BASE_IMAGE
 from .api_parse import (
+    DEFAULT_PYTHON,
     TesseractBuildConfig,
     TesseractConfig,
     get_config,
@@ -641,6 +643,12 @@ def init_api(
         "version": tesseract_version,
         "timestamp": datetime.datetime.now().astimezone().isoformat(),
         "name": tesseract_name,
+        # Offered as commented-out pins: the current default image, and the Python
+        # `tesseract init` runs on (also what the user tests `Tesseract.from_source`
+        # with). Unpinned, a Tesseract follows our defaults, named alongside.
+        "base_image": TesseractBuildConfig.model_fields["base_image"].default,
+        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "default_python": DEFAULT_PYTHON,
     }
 
     # If target dir does not exist, create it
